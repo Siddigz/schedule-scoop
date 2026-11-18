@@ -1,0 +1,16 @@
+name = "schedule-scoop-feedback"
+main = "feedback-relay.mjs"
+compatibility_date = "2025-06-01"
+
+[vars]
+# Lock the relay to the published extension. Add more origins comma-separated (e.g. a dev build).
+ALLOWED_ORIGINS = ""
+
+# Up to 3 feedback messages per IP per minute.
+[[ratelimits]]
+name = "FEEDBACK_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 3
+  period = 60

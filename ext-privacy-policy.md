@@ -7,6 +7,7 @@ ScheduleScoop helps Carleton University students export their course timetables 
 
 ## What Data We Collect
 - **No data is collected by us** - everything stays local in your browser, calendar events are created using secure OAuth when you choose Google/Outlook
+- **Feedback is optional** - if you use the feedback form, your message, the optional email you enter and the extension version are sent through our relay to the developers' Discord channel. Nothing else is sent
 
 ## Your Privacy
 - **No personal data stored on our servers** - everything stays local or goes directly to your chosen calendar

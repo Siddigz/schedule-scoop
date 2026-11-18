@@ -4,7 +4,9 @@ const { schedule } = globalThis.ScheduleScoop;
 
 const SSO_URL = 'https://ssoman.carleton.ca/ssomanager/c/SSB?pkg=bwskfshd.P_CrseSchd';
 const EXPORT_SCRIPTS = ['src/schedule.js', 'src/carleton-parse.js', 'src/export.js', 'src/status-card.js', 'src/carleton.js'];
-const FEEDBACK_WEBHOOK = 'https://discord.com/api/webhooks/1410751558974439526/8mCube_3wFRkxkfDBgJ77JMwaF3olsePFJXXMuLPXHKMoFsqqb6JRNS0NQPHy2Rd_7_Q';
+// Feedback goes through the relay in worker/ so the Discord webhook URL never ships in the extension.
+// Set this to the deployed Worker URL (see worker/README.md). While it's empty the form says so.
+const FEEDBACK_ENDPOINT = '';
 const FEEDBACK_COOLDOWN_MS = 60 * 1000;
 const NEW_BADGE_OPENS = 3;
 
@@ -121,6 +123,7 @@ function wireFeedback() {
 
   $('feedback-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!FEEDBACK_ENDPOINT) { setStatus("Feedback isn't set up yet. Please open an issue on GitHub instead.", 'error'); return; }
     const text = $('feedback-text').value.trim();
     if (!text) { setStatus('Write a message first.', 'error'); $('feedback-text').focus(); return; }
     const { 'feedback-last-sent': last = 0 } = await store.get('feedback-last-sent');
@@ -143,21 +146,11 @@ function wireFeedback() {
 }
 
 async function sendFeedback({ email, feedback }) {
-  const now = new Date();
-  const payload = {
-    username: 'Schedule Scoop Feedback',
-    avatar_url: 'https://raw.githubusercontent.com/nolandruid/schedule-scoop/main/images/calendar128.png',
-    embeds: [{
-      description: `\`\`\`\n${feedback.length > 1994 ? `${feedback.substring(0, 1991)}...` : feedback}\n\`\`\``,
-      color: 0x4f46e5,
-      fields: [
-        { name: 'Contact Email', value: email || 'Anonymous', inline: false },
-        { name: 'Version', value: chrome.runtime.getManifest().version, inline: false },
-      ],
-      timestamp: now.toISOString(),
-    }],
-  };
-  const res = await fetch(FEEDBACK_WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const res = await fetch(FEEDBACK_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, feedback, version: chrome.runtime.getManifest().version }),
+  });
   if (!res.ok) throw new Error(`Feedback failed: ${res.status}`);
 }
 

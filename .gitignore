@@ -13,3 +13,6 @@ Screenshots/
 # Saved Carleton pages with personal data (never commit)
 tests/fixtures/private/
 node_modules/
+
+# Cloudflare Worker build files
+worker/.wrangler/

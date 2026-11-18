@@ -29,50 +29,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep message channel open for async response
   }
 
-  // Handle Outlook Calendar token request synchronously
+  // Handle Outlook Calendar token request (authorization code flow with PKCE)
   if (message.action === 'getOutlookCalendarToken') {
-    const clientId = '4e6fdfa3-e2e0-4893-a3c4-527ea3dd4ce4';
-    const redirectUri = `https://${chrome.runtime.id}.chromiumapp.org/`;
-    const scope = 'https://graph.microsoft.com/calendars.readwrite';
-    
-    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?` +
-      `client_id=${clientId}&` +
-      `response_type=token&` +
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `scope=${encodeURIComponent(scope)}&` +
-      `response_mode=fragment&` +
-      `prompt=login&` +
-      `login_hint=&` +
-      `domain_hint=`;
-
-    chrome.identity.launchWebAuthFlow({
-      url: authUrl,
-      interactive: true
-    }, (responseUrl) => {
-      if (chrome.runtime.lastError) {
-        console.error('Outlook Calendar auth error:', chrome.runtime.lastError);
-        sendResponse({ success: false, error: { message: chrome.runtime.lastError.message } });
-        return;
-      }
-      
-      if (!responseUrl) {
-        console.error('Outlook Calendar auth cancelled');
-        sendResponse({ success: false, error: { message: 'Authentication cancelled by user' } });
-        return;
-      }
-      
-      // Extract access token from URL fragment
-      const urlParams = new URLSearchParams(responseUrl.split('#')[1]);
-      const accessToken = urlParams.get('access_token');
-      
-      if (accessToken) {
+    getOutlookToken()
+      .then((token) => {
         console.log('Outlook Calendar token obtained successfully');
-        sendResponse({ success: true, token: accessToken });
-      } else {
-        console.error('Failed to extract Outlook access token');
-        sendResponse({ success: false, error: { message: 'Failed to extract access token from response' } });
-      }
-    });
+        sendResponse({ success: true, token });
+      })
+      .catch((err) => {
+        console.error('Outlook Calendar auth error:', err);
+        sendResponse({ success: false, error: { message: err.message } });
+      });
     return true; // Keep message channel open for async response
   }
 
@@ -115,4 +82,72 @@ const EXPORT_SCRIPTS = ['src/schedule.js', 'src/carleton-parse.js', 'src/export.
  */
 function injectScript(tabId) {
   chrome.scripting.executeScript({ target: { tabId }, files: EXPORT_SCRIPTS });
+}
+
+const OUTLOOK_CLIENT_ID = '4e6fdfa3-e2e0-4893-a3c4-527ea3dd4ce4';
+const OUTLOOK_SCOPE = 'https://graph.microsoft.com/Calendars.ReadWrite';
+const MS_AUTHORITY = 'https://login.microsoftonline.com/common/oauth2/v2.0';
+
+const base64Url = (bytes) =>
+  btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+const randomString = (byteLength) => base64Url(crypto.getRandomValues(new Uint8Array(byteLength)));
+
+/**
+ * Signs in to Microsoft with the authorization code flow + PKCE and returns a Graph access token.
+ * Replaces the implicit flow (response_type=token), which Microsoft no longer recommends.
+ * Requires the redirect URI to be registered under the "Single-page application" platform in Azure.
+ * @returns {Promise<string>} access token
+ */
+async function getOutlookToken() {
+  const redirectUri = chrome.identity.getRedirectURL();
+  const verifier = randomString(64);
+  const challenge = base64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
+  const state = randomString(32);
+
+  const authUrl = `${MS_AUTHORITY}/authorize?` + new URLSearchParams({
+    client_id: OUTLOOK_CLIENT_ID,
+    response_type: 'code',
+    redirect_uri: redirectUri,
+    response_mode: 'query',
+    scope: OUTLOOK_SCOPE,
+    state,
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    prompt: 'login',
+  });
+
+  let responseUrl;
+  try {
+    responseUrl = await chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true });
+  } catch (err) {
+    throw new Error(err?.message || 'Authentication cancelled by user');
+  }
+  if (!responseUrl) throw new Error('Authentication cancelled by user');
+
+  const params = new URL(responseUrl).searchParams;
+  if (params.get('error')) {
+    throw new Error(params.get('error_description') || params.get('error'));
+  }
+  if (params.get('state') !== state) throw new Error('Sign-in response did not match the request (state mismatch)');
+  const code = params.get('code');
+  if (!code) throw new Error('No authorization code in sign-in response');
+
+  const res = await fetch(`${MS_AUTHORITY}/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: OUTLOOK_CLIENT_ID,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      code_verifier: verifier,
+      scope: OUTLOOK_SCOPE,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.access_token) {
+    throw new Error(data.error_description || data.error || `Token request failed: ${res.status}`);
+  }
+  return data.access_token;
 }
