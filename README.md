@@ -2,6 +2,10 @@
 
 A Chrome extension that exports your Carleton University timetable to Google Calendar, Outlook or an `.ics` file in a few clicks.
 
+| Light mode | Dark mode |
+| :---: | :---: |
+| <img src="docs/images/popup-light.png" alt="ScheduleScoop popup in light mode, with term, calendar and lab options and an Export button" width="300"> | <img src="docs/images/popup-dark.png" alt="ScheduleScoop popup in dark mode" width="300"> |
+
 ## What's new in v3
 
 - **New look**: a single-screen popup with light and dark mode
@@ -41,6 +45,9 @@ A Chrome extension that exports your Carleton University timetable to Google Cal
 5. Pick how often **labs** repeat: every week or every 2 weeks
 6. Click **Export**. ScheduleScoop opens Carleton Central (sign in if asked)
 7. Watch the status card in the bottom-right corner of the Carleton tab. It shows each step and tells you when your classes are in your calendar, or what went wrong
+
+   <img src="docs/images/status-card.png" alt="Status card saying 14 events were added to Google Calendar, with a link to open it" width="340">
+
 8. For Google or Outlook, finish the sign-in window that opens
 
 Tip: signing in to Carleton Central before you click Export makes it faster.
